@@ -1,0 +1,77 @@
+# syntax=docker/dockerfile:1
+FROM debian:12.0-slim AS build
+LABEL Description="rldockscore:0.0.1 build"
+ARG VER="0.0.1"
+
+ENV TZ=America/Chicago \
+    DEBIAN_FRONTEND=noninteractive
+
+WORKDIR /app
+SHELL ["/bin/bash", "-c"]
+
+RUN apt-get update && \
+    apt-get -y --no-install-recommends install \
+    apt-utils vim tcsh wget git unzip bzip2 sudo gawk \
+    make cmake gcc g++ gdb gfortran build-essential \
+    faketime expect && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install miniconda
+COPY ./packages/${VER}/miniconda/24.11.1-0-py39/Miniconda3-py39_24.11.1-0-Linux-x86_64.sh /app/
+RUN cd /app/ && /bin/bash ./Miniconda3-py39_24.11.1-0-Linux-x86_64.sh -b -p /app/miniconda
+ENV PATH=/app/miniconda/bin:${PATH}
+RUN rm ./Miniconda3-py39_24.11.1-0-Linux-x86_64.sh
+RUN conda update -n base conda
+RUN conda install -n base conda-libmamba-solver
+RUN conda config --set solver libmamba
+
+# Install conda packages
+RUN conda install -y -q -c conda-forge scikit-learn=1.5.0 \
+                                       polars=1.17.1 \
+                                       numpy=2.0.2 
+#                                      matplotlib=3.9.4
+
+# Install RLDOCKScore
+COPY ./packages/${VER}/rldockscore/RLDOCKScore.2025.02.14.tar.gz /app/
+RUN tar -xzf RLDOCKScore.2025.02.14.tar.gz && rm RLDOCKScore.2025.02.14.tar.gz && mv RLDOCKScore.2025.02.14 rldockscore
+RUN cd /app/rldockscore && make
+RUN chmod -R 777 /app/rldockscore
+ENV RLDOCKSCORE_HOME=/app/rldockscore
+ENV PATH=/app/rldockscore/bin:${PATH}
+
+# Generate test scripts
+RUN mkdir -p /app/test/rldockscore
+RUN cd /app/test/rldockscore && echo '#!/usr/bin/env bash' > test.sh && \
+    echo "mkdir -p /mnt/biopod.rldockscore.${VER}.test" >> test.sh && \
+    echo "cd \${RLDOCKSCORE_HOME}/example && ./run_example > /mnt/biopod.rldockscore.${VER}.test/log.test 2>&1" >> test.sh && \
+    echo "cd \${RLDOCKSCORE_HOME}/example && ./run_conversion_test >> /mnt/biopod.rldockscore.${VER}.test/log.test 2>&1" >> test.sh && \
+    chmod -R 777 test.sh
+
+##########################################################################
+
+FROM debian:12.0-slim AS runtime
+LABEL Description="rldockscore:0.0.1 runtime"
+ARG VER="0.0.1"
+
+ENV TZ=America/Chicago \
+    DEBIAN_FRONTEND=noninteractive
+
+WORKDIR /mnt
+SHELL ["/bin/bash", "-c"]
+
+RUN apt-get update && \
+    apt-get -y --no-install-recommends install \
+    apt-utils vim tcsh wget git unzip bzip2 sudo gawk \
+    make cmake gcc g++ gdb gfortran build-essential \
+    faketime expect && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /app/ /app/
+COPY --from=build /usr/local/lib/ /usr/local/lib/
+COPY --from=build /usr/local/bin/ /usr/local/bin/
+
+ENV RLDOCKSCORE_HOME=/app/rldockscore
+ENV PATH=/app/rldockscore/bin:/app/miniconda/bin:${PATH}
+
