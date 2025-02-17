@@ -33,8 +33,8 @@ RUN conda install -y -q -c conda-forge scikit-learn=1.5.0 \
 #                                      matplotlib=3.9.4
 
 # Install RLDOCKScore
-COPY ./packages/${VER}/rldockscore/RLDOCKScore.2025.02.14.tar.gz /app/
-RUN tar -xzf RLDOCKScore.2025.02.14.tar.gz && rm RLDOCKScore.2025.02.14.tar.gz && mv RLDOCKScore.2025.02.14 rldockscore
+COPY ./packages/${VER}/rldockscore/RLDOCKScore.2025.02.17.tar.gz /app/
+RUN tar -xzf RLDOCKScore.2025.02.17.tar.gz && rm RLDOCKScore.2025.02.17.tar.gz && mv RLDOCKScore.2025.02.17 rldockscore
 RUN cd /app/rldockscore && make
 RUN chmod -R 777 /app/rldockscore
 ENV RLDOCKSCORE_HOME=/app/rldockscore
